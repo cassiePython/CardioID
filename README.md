@@ -1,6 +1,6 @@
 # Introduction
 
-This is a pytorch implementation of ResNet [0] and ResNeXt [1] on one-dimensional data classification. 
+This is a pytorch implementation of HashResNet [0,1] on one-dimensional data classification. 
 
 # Usage
 
@@ -8,8 +8,6 @@ This is a pytorch implementation of ResNet [0] and ResNeXt [1] on one-dimensiona
 # test on synthetic data
 python test_synthetic.py
 
-# test on PhysioNet/CinC Challenge 2017 data
-python test_physionet.py
 ```
 
 # Requirements
@@ -31,7 +29,7 @@ The model has been used in one of the First place solution (F1=0.83) [2, 3]. The
 
 [0] He, Kaiming, et al. "Deep residual learning for image recognition." CVPR 2016 [paper](https://arxiv.org/abs/1512.03385)
 
-[1] Saining Xie, Ross B. Girshick, Piotr Dollár, Zhuowen Tu, Kaiming He: Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017 [paper](https://arxiv.org/abs/1611.05431)
+[1] Zhangjie Cao, Mingsheng Long, Jianmin Wang, Philip S. Yu: HashNet: Deep Learning to Hash by Continuation. ICCV 2017 [paper](https://arxiv.org/abs/1702.00758)
 
 [2] Shenda Hong, Meng Wu, Yuxi Zhou, Qingyun Wang, Junyuan Shang, Hongyan Li, Junqing Xie. ENCASE: an ENsemble ClASsifiEr for ECG Classification Using Expert Features and Deep Neural Networks. Computing in Cardiology (CinC) Conference 2017 [paper](http://www.cinc.org/archives/2017/pdf/178-245.pdf)
 
