@@ -1,6 +1,7 @@
 from resnet1d import ResNet1D
 import torch
 import torch.nn as nn
+import math
 
 class HashResNet1D(ResNet1D):
     """
