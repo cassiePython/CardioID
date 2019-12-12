@@ -5,9 +5,8 @@ This is a pytorch implementation of HashResNet [0,1] on one-dimensional data cla
 # Usage
 
 ```
-# test on synthetic data
-python test_synthetic.py
-
+# test on physionet data
+python test_physionet.py
 ```
 
 # Requirements
