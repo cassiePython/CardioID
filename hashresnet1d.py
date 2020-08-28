@@ -30,7 +30,7 @@ class HashResNet1D(ResNet1D):
         self.hash_layer = nn.Linear(512, hash_bit)
         self.hash_layer.weight.data.normal_(0, 0.01)
         self.hash_layer.bias.data.fill_(0.0)
-        self.dense = nn.Linear(self.hash_bit, n_classes)
+        self.dense = nn.Linear(hash_bit, n_classes)
         self.iter_num = 0
         self.__in_features = hash_bit
         self.step_size = 200
@@ -71,14 +71,15 @@ class HashResNet1D(ResNet1D):
         if self.verbose:
             print('final pooling', out.shape)
 
-        out = self.hash_layer(out)
+        center_feature = self.hash_layer(out)
         if self.iter_num % self.step_size==0:
             self.scale = self.init_scale * (math.pow((1.+self.gamma*self.iter_num), self.power))
-        out = self.activation(self.scale*out)
+        code = self.activation(self.scale*center_feature)
+        
         if self.verbose:
-            print('hash layer', out.shape)
-        out = self.dense(out)
+            print('hash layer', code.shape)
+        out = self.dense(code)
         if self.verbose:
             print('dense', out.shape)
-   
-        return out
+
+        return center_feature, code, out

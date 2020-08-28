@@ -1,7 +1,7 @@
 """
 resnet for 1-d signal data, pytorch version
  
-Shenda Hong, Oct 2019
+Can Wang, Oct 2019
 """
 
 import numpy as np
@@ -9,7 +9,7 @@ from collections import Counter
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from sklearn.metrics import classification_report 
-
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -17,12 +17,20 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 class MyDataset(Dataset):
-    def __init__(self, data, label):
+    def __init__(self, data, label, is_train):
         self.data = data
         self.label = label
+        self.is_train = is_train
 
     def __getitem__(self, index):
-        return (torch.tensor(self.data[index], dtype=torch.float), torch.tensor(self.label[index], dtype=torch.long))
+        if self.is_train:
+            ind_one = random.randint(0, len(self.data) - 1)
+            ind_two = random.randint(0, len(self.data) - 1)
+            return (torch.tensor(self.data[ind_one], dtype=torch.float), torch.tensor(self.label[ind_one], dtype=torch.long),
+                    torch.tensor(self.data[ind_two], dtype=torch.float), torch.tensor(self.label[ind_two], dtype=torch.long)
+                    )
+        else:
+            return (torch.tensor(self.data[index], dtype=torch.float), torch.tensor(self.label[index], dtype=torch.long))
 
     def __len__(self):
         return len(self.data)

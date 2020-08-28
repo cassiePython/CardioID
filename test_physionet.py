@@ -1,54 +1,56 @@
 """
 test on physionet data
 
-Shenda Hong, Nov 2019
+Can Wang, Aug 2020
 """
 
 import numpy as np
-from collections import Counter
 from tqdm import tqdm
-from matplotlib import pyplot as plt
-from sklearn.metrics import classification_report, confusion_matrix
-
-from util import read_data_physionet_2, read_data_physionet_4, preprocess_physionet
+import time
+from util import *
 from resnet1d import ResNet1D, MyDataset
-
+from options.test_options import TestOptions
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from tensorboardX import SummaryWriter
 from torchsummary import summary
 from hashresnet1d import HashResNet1D
+from collections import Counter
+import loss
+import dill
+import os
 
 if __name__ == "__main__":
 
+    opt = TestOptions().parse()
+
     is_debug = False
-    
-    batch_size = 32
-    if is_debug:
-        writer = SummaryWriter('/nethome/shong375/log/resnet1d/challenge2017/debug')
-    else:
-        writer = SummaryWriter('/nethome/shong375/log/resnext1d/challenge2017/layer98')
+    n_classes = opt.n_classes
+    batch_size = opt.batch_size
+    window_size = opt.window_size
+    stride = opt.stride
+    hash_bit = opt.hash_bit
+    save_dir = os.path.join(opt.checkpoints_dir, opt.name)
+    load_step = opt.load_epoch
 
     # make data
     # preprocess_physionet() ## run this if you have no preprocessed data yet
-    X_train, X_test, Y_train, Y_test, pid_test = read_data_physionet_4()
-    print(X_train.shape, Y_train.shape)
-    dataset = MyDataset(X_train, Y_train)
-    dataset_test = MyDataset(X_test, Y_test)
-    dataloader = DataLoader(dataset, batch_size=batch_size)
-    dataloader_test = DataLoader(dataset_test, batch_size=batch_size, drop_last=False)
-    
-    # make model
-    device_str = "cuda"
-    device = torch.device(device_str if torch.cuda.is_available() else "cpu")
+    X_train, X_test, Y_train, Y_test = read_data_physionet(window_size=window_size, stride=stride, is_train=False)
+    print("Train Set:", X_train.shape, Y_train.shape)
+    print("Test Set:", X_test.shape, Y_test.shape)
+    dataset = MyDataset(X_train, Y_train, is_train=False)
+    dataset_test = MyDataset(X_test, Y_test, is_train=False)
+    dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=False, shuffle=False)
+    dataloader_test = DataLoader(dataset_test, batch_size=batch_size, drop_last=False, shuffle=False)
+
     kernel_size = 16
     stride = 2
     n_block = 48
     downsample_gap = 6
     increasefilter_gap = 12
+    
     model = HashResNet1D(
         in_channels=1, 
         base_filters=64, # 64 for ResNet1D, 352 for ResNeXt1D
@@ -56,84 +58,102 @@ if __name__ == "__main__":
         stride=stride,
         groups=32, 
         n_block=n_block, 
-        n_classes=4,
-        hash_bit=48,
+        n_classes=n_classes,
+        hash_bit=hash_bit,
         downsample_gap=downsample_gap,
         increasefilter_gap=increasefilter_gap, 
         use_do=True)
-    """
-    model = ResNet1D(
-        in_channels=1, 
-        base_filters=128, # 64 for ResNet1D, 352 for ResNeXt1D
-        kernel_size=kernel_size, 
-        stride=stride, 
-        groups=32, 
-        n_block=n_block, 
-        n_classes=4, 
-        downsample_gap=downsample_gap, 
-        increasefilter_gap=increasefilter_gap, 
-        use_do=True)
-    """
-    model.to(device)
-
-    summary(model, (X_train.shape[1], X_train.shape[2]), device=device_str)
-    # exit()
+    model = model.cuda()
+     
+    network_label = 'hashnet'
+    load_network(save_dir, model, network_label, load_step)
 
     # train and test
     model.verbose = False
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
-    loss_func = torch.nn.CrossEntropyLoss()
+    model.eval()
 
-    n_epoch = 50
-    step = 0
-    for _ in tqdm(range(n_epoch), desc="epoch", leave=False):
+    SigBankPath = os.path.join(save_dir, 'SigBank.pkl')
 
-        # train
-        model.train()
+    if not os.path.exists(SigBankPath):    
+        SigBank = [] # [(subject,hashcode),...,(subject,hashcode)]
         prog_iter = tqdm(dataloader, desc="Training", leave=False)
-        for batch_idx, batch in enumerate(prog_iter):
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(prog_iter):
 
-            input_x, input_y = tuple(t.to(device) for t in batch)
-            pred = model(input_x)
-            loss = loss_func(pred, input_y)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            step += 1
+                input_x, input_y = tuple(t.cuda() for t in batch)
+                _, codes, outputs = model(input_x)
+                codes = torch.sign(codes)
+                #print (input_x.shape[0])
+                for ind in range(input_x.shape[0]):
+                    subject = int(input_y[ind].cpu().data.numpy())
+                    hashcode = codes[ind].cpu().data.numpy()
+                    SigBank.append((subject,hashcode))
+                    #print ((subject,hashcode))
+        SigBank = sorted(SigBank, key=lambda x:x[0])
+        # remove duplicate
+        SigBank = remove_dup(SigBank)       
+        # save SigBank
+        res = {'SigBank':SigBank}
+        with open(SigBankPath, 'wb') as fout:
+            dill.dump(res, fout)
 
-            writer.add_scalar('Loss/train', loss.item(), step)
+    with open(SigBankPath,'rb') as fin:
+        res = dill.load(fin)
+    SigBank = res['SigBank']
 
-            if is_debug:
-                break
-        
-        scheduler.step(_)
-                    
-        # test
-        model.eval()
+    TestCodesPath = os.path.join(save_dir, 'TestCodes.pkl')
+       
+    if not os.path.exists(TestCodesPath):
+        TestCodes = []
         prog_iter_test = tqdm(dataloader_test, desc="Testing", leave=False)
-        all_pred_prob = []
         with torch.no_grad():
             for batch_idx, batch in enumerate(prog_iter_test):
-                input_x, input_y = tuple(t.to(device) for t in batch)
-                pred = model(input_x)
-                all_pred_prob.append(pred.cpu().data.numpy())
-        all_pred_prob = np.concatenate(all_pred_prob)
-        all_pred = np.argmax(all_pred_prob, axis=1)
-        ## vote most common
-        final_pred = []
-        final_gt = []
-        for i_pid in np.unique(pid_test):
-            tmp_pred = all_pred[pid_test==i_pid]
-            tmp_gt = Y_test[pid_test==i_pid]
-            final_pred.append(Counter(tmp_pred).most_common(1)[0][0])
-            final_gt.append(Counter(tmp_gt).most_common(1)[0][0])
-        ## classification report
-        tmp_report = classification_report(final_gt, final_pred, output_dict=True)
-        print(confusion_matrix(final_gt, final_pred))
-        f1_score = (tmp_report['0']['f1-score'] + tmp_report['1']['f1-score'] + tmp_report['2']['f1-score'] + tmp_report['3']['f1-score'])/4
-        writer.add_scalar('F1/f1_score', f1_score, _)
-        writer.add_scalar('F1/label_0', tmp_report['0']['f1-score'], _)
-        writer.add_scalar('F1/label_1', tmp_report['1']['f1-score'], _)
-        writer.add_scalar('F1/label_2', tmp_report['2']['f1-score'], _)
-        writer.add_scalar('F1/label_3', tmp_report['3']['f1-score'], _)
+
+                input_x, input_y = tuple(t.cuda() for t in batch)
+                _, codes, outputs = model(input_x)
+                codes = torch.sign(codes)
+                for ind in range(input_x.shape[0]):
+                    subject = int(input_y[ind].cpu().data.numpy())
+                    hashcode = codes[ind].cpu().data.numpy()
+                    TestCodes.append((subject,hashcode))
+        # save TestCodes
+        TestCodes = sorted(TestCodes, key=lambda x:x[0])
+        res = {'TestCodes':TestCodes}
+        with open(TestCodesPath, 'wb') as fout:
+            dill.dump(res, fout)
+
+    with open(TestCodesPath,'rb') as fin:
+        res = dill.load(fin)
+    TestCodes = res['TestCodes']
+
+    # This is a very naive(simple) version to search the SigBank - Just use to test the code
+    # Its efficiency is unsatisfactory. But it can be accelerated by using 'early stop' described in the paper.
+    # Other parallel processing strategies can also be used
+    # Due to some engineering techniques, code of this part can not be available currently.
+    TestCodesDic = conv_TestCodes(TestCodes)
+    top_k = 100
+    most = 20
+    total = 0
+    start = time.time()
+    for k, v in TestCodesDic.items():
+        total_subjects = pred_one(v, SigBank, top_k)      
+        total_subjects = Counter(total_subjects)
+        result = total_subjects.most_common(most)
+        s = [item[0] for item in result]
+        if k in s:
+            total += 1
+            #print (total)
+    end = time.time()
+    print("Time :%f秒"%(end-start))
+    print (total)
+    print (len(TestCodesDic))
+        
+        
+
+    
+    
+    
+
+    
+           
+    

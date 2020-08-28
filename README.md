@@ -1,11 +1,15 @@
 # Introduction
 
-This is a pytorch implementation of HashResNet [0,1] on one-dimensional data classification. 
+This is a pytorch implementation for the paper CadioID: learning to identification from electrocardiogram data. [paper](https://github.com/cassiePython/CardioID).
+We design a HashResNet [0,1] on one-dimensional data classification in this work.
 
 # Usage
 
 ```
-# test on physionet data
+# Train the model - we give default parameters in options/train_options.py
+python train_physionet.py
+
+# test the model - we give default parameters in options/test_options.py
 python test_physionet.py
 ```
 
@@ -28,7 +32,7 @@ The model has been used in one of the First place solution (F1=0.83) [2, 3]. The
 
 [0] He, Kaiming, et al. "Deep residual learning for image recognition." CVPR 2016 [paper](https://arxiv.org/abs/1512.03385)
 
-[1] Zhangjie Cao, Mingsheng Long, Jianmin Wang, Philip S. Yu: HashNet: Deep Learning to Hash by Continuation. ICCV 2017 [paper](https://arxiv.org/abs/1702.00758)
+[1] Saining Xie, Ross B. Girshick, Piotr Dollár, Zhuowen Tu, Kaiming He: Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017 [paper](https://arxiv.org/abs/1611.05431)
 
 [2] Shenda Hong, Meng Wu, Yuxi Zhou, Qingyun Wang, Junyuan Shang, Hongyan Li, Junqing Xie. ENCASE: an ENsemble ClASsifiEr for ECG Classification Using Expert Features and Deep Neural Networks. Computing in Cardiology (CinC) Conference 2017 [paper](http://www.cinc.org/archives/2017/pdf/178-245.pdf)
 
